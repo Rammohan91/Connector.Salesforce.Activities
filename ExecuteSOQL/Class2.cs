@@ -87,10 +87,10 @@ namespace Salesforce
                 if (queryResult.size > 0)
                 {
 
-                    int NoOfColumns = queryResult.records[1].Any.Count();
+                    int NoOfColumns = queryResult.records[0].Any.Count();
                     for (int i = 0; i < NoOfColumns; i++)
                     {
-                        string ColumnName = queryResult.records[1].Any[i].Name;
+                        string ColumnName = queryResult.records[0].Any[i].Name;
                         table.Columns.Add(ColumnName);
                         //Console.WriteLine("Name of Column:" + ColumnName);
                     }
