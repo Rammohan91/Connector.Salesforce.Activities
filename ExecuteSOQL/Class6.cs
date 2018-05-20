@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace Salesforce
 {
-    public class Execute_SOQL_SANDBOX : CodeActivity
+    public class Update_Record_SANDBOX : CodeActivity
     {
         [Category("Input")]
         [RequiredArgument]
@@ -25,10 +25,22 @@ namespace Salesforce
 
         [Category("Input")]
         [RequiredArgument]
-        public InArgument<String> SOQLQuery { get; set; }
+        public InArgument<String[]> FieldNames { get; set; }
+
+        [Category("Input")]
+        [RequiredArgument]
+        public InArgument<String[]> FieldValues { get; set; }
+
+        [Category("Input")]
+        [RequiredArgument]
+        public InArgument<String> ID { get; set; }
+
+        [Category("Input")]
+        [RequiredArgument]
+        public InArgument<String> ObjectName { get; set; }
 
         [Category("Output")]
-        public OutArgument<System.Data.DataTable> OutputDataTable { get; set; }
+        public OutArgument<String> RecordID { get; set; }
 
         protected override void Execute(CodeActivityContext context)
         {
@@ -74,48 +86,56 @@ namespace Salesforce
                 SfdcBinding.SessionHeaderValue = new SessionHeader();
                 SfdcBinding.SessionHeaderValue.sessionId = CurrentLoginResult.sessionId;
 
-                QueryResult queryResult = null;
+                String[] fieldNames = FieldNames.Get(context);
+                String[] fieldValues = FieldValues.Get(context);
 
-                String SOQL = "";
+                sObject obj = new sObject();
+                System.Xml.XmlElement[] objFields = new System.Xml.XmlElement[fieldNames.Length];
 
-                SOQL = SOQLQuery.Get(context); //SOQL Query from context
+                System.Xml.XmlDocument doc = new System.Xml.XmlDocument();
 
-                queryResult = SfdcBinding.query(SOQL);
 
-                System.Data.DataTable table = new System.Data.DataTable();
-
-                if (queryResult.size > 0)
+                for (int i = 0; i < fieldNames.Length; i++)
                 {
+                    objFields[i] = doc.CreateElement(fieldNames[i]);
+                }
 
-                    int NoOfColumns = queryResult.records[0].Any.Count();
-                    for (int i = 0; i < NoOfColumns; i++)
+                for (int j = 0; j < fieldValues.Length; j++)
+                {
+                    objFields[j].InnerText = fieldValues[j];
+                }
+
+                obj.type = ObjectName.Get(context);
+                obj.Any = objFields;
+                obj.Id = ID.Get(context);
+
+                sObject[] objList = new sObject[1];
+                objList[0] = obj;
+
+                SaveResult[] results = SfdcBinding.update(objList);
+
+                for (int j = 0; j < results.Length; j++)
+                {
+                    if (results[j].success)
                     {
-                        string ColumnName = queryResult.records[0].Any[i].Name;
-                        table.Columns.Add(ColumnName);
-                        //Console.WriteLine("Name of Column:" + ColumnName);
+                        RecordID.Set(context, "Record Updated for ID: " + results[j].id);
                     }
-
-                    for (int j = 0; j < queryResult.records.Length; j++)
+                    else
                     {
-
-                        System.Data.DataRow dr = table.NewRow();
-                        object[] rowArray = new object[table.Columns.Count];
-
-                        for (int k = 0; k < table.Columns.Count; k++)
+                        // There were errors during the create call,
+                        // go through the errors array and write
+                        // them to the console
+                        String error;
+                        for (int i = 0; i < results[j].errors.Length; i++)
                         {
-                            rowArray[k] = queryResult.records[j].Any[k].InnerText;
+                            Error err = results[j].errors[i];
+                            error = "Errors was found on item " + j.ToString() + Environment.NewLine
+                                + "Error code is: " + err.statusCode.ToString() + Environment.NewLine
+                                + "Error message: " + err.message;
+                            RecordID.Set(context, error);
                         }
-                        dr.ItemArray = rowArray;
-                        table.Rows.Add(dr);
                     }
-
                 }
-                else
-                {
-                    Console.WriteLine("No Records Available.");
-                }
-
-                OutputDataTable.Set(context, table);//output table to context
             }
         }
 
